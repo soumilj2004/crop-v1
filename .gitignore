@@ -1,0 +1,11 @@
+data/
+archive/models/
+models/*_checkpoint.pt
+models/*_log.txt
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+*.log
+training_script.log
+.env
