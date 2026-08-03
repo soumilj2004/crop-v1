@@ -9,3 +9,7 @@ venv/
 *.log
 training_script.log
 .env
+*.zip
+colab_pkg/
+gpu_pkg_wheat/
+cropguard_colab.ipynb
