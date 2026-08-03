@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>CropGuard AI — Disease Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0c1322;--surface:#131d33;--surface-hover:#1a2740;--surface-border:#1e3050;--primary:#00e676;--primary-dim:#00b853;--primary-glow:rgba(0,230,118,0.25);--accent:#00bcd4;--text:#e8edf5;--text-dim:#7a8ba8;--text-muted:#4a5a78;--danger:#ff5252;--danger-bg:rgba(255,82,82,0.12);--warning:#ffab40;--warning-bg:rgba(255,171,64,0.12);--success:#00e676;--success-bg:rgba(0,230,118,0.1);--info:#40c4ff;--info-bg:rgba(64,196,255,0.1);--radius:14px;--radius-sm:10px;--font:Inter,system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--shadow:0 4px 24px rgba(0,0,0,0.4);--transition:.25s cubic-bezier(0.4,0,0.2,1)}
+@media(prefers-color-scheme:light){:root{--bg:#eef2f7;--surface:#ffffff;--surface-hover:#f5f8fc;--surface-border:#dce2ec;--primary:#00a854;--primary-dim:#008f46;--primary-glow:rgba(0,168,84,0.2);--text:#0f1a2e;--text-dim:#5a6e8a;--text-muted:#8fa0b8;--shadow:0 4px 20px rgba(0,0,0,0.06)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
+
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ---- Grid background ---- */
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.03;background-image:linear-gradient(var(--primary)1px,transparent 1px),linear-gradient(90deg,var(--primary)1px,transparent 1px);background-size:48px 48px}
+.bg-glow{position:fixed;top:-30vh;right:-20vw;width:60vw;height:60vw;border-radius:50%;background:radial-gradient(circle,var(--primary-glow)0%,transparent 70%);pointer-events:none;z-index:0;opacity:.5;animation:drift 20s ease-in-out infinite alternate}
+.bg-glow2{position:fixed;bottom:-30vh;left:-20vw;width:50vw;height:50vw;border-radius:50%;background:radial-gradient(circle,rgba(0,188,212,0.12)0%,transparent 70%);pointer-events:none;z-index:0;opacity:.4;animation:drift2 25s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0)}100%{transform:translate(-10%,15%)}}
+@keyframes drift2{0%{transform:translate(0,0)}100%{transform:translate(15%,-10%)}}
+
+/* ---- Header ---- */
+header{position:relative;z-index:1;padding:28px 20px 18px;max-width:480px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.header-left{display:flex;align-items:center;gap:12px}
+.header-logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-dim));display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 20px var(--primary-glow)}
+.header-logo svg{width:22px;height:22px;color:#0c1322}
+.header-title{font-size:1.1rem;font-weight:700;letter-spacing:-.3px;color:var(--text)}
+.header-title span{color:var(--primary)}
+.status-indicator{display:flex;align-items:center;gap:6px;font-size:.68rem;color:var(--text-dim);background:var(--surface);border:1px solid var(--surface-border);padding:5px 12px;border-radius:20px}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--primary);animation:pulse 2s infinite;box-shadow:0 0 6px var(--primary-glow)}
+.status-dot.offline{background:var(--danger);box-shadow:0 0 6px rgba(255,82,82,0.4);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ---- Main ---- */
+main{position:relative;z-index:1;padding:0 16px 80px;max-width:480px;margin:0 auto}
+.page{display:none;animation:pageIn .3s ease}
+.page.active{display:block}
+@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---- Card base ---- */
+.card{background:var(--surface);border:1px solid var(--surface-border);border-radius:var(--radius);box-shadow:var(--shadow);transition:all var(--transition)}
+.card:hover{border-color:var(--primary);box-shadow:0 4px 28px var(--primary-glow)}
+.card-header{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+.card-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-icon svg{width:15px;height:15px}
+.card-label{font-size:.68rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:var(--mono)}
+.card-body{padding:14px 16px 16px}
+.card-value{font-size:1.2rem;font-weight:700;color:var(--text);letter-spacing:-.3px}
+.card-sub{font-size:.75rem;color:var(--text-dim);margin-top:2px}
+
+/* ---- Upload zone ---- */
+.upload-card{padding:0;overflow:hidden}
+.upload-zone{position:relative;padding:56px 20px;text-align:center;cursor:pointer;transition:all var(--transition);border:1.5px dashed var(--surface-border);border-radius:var(--radius);background:transparent}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--primary);background:var(--success-bg);transform:scale(1.005)}
+.upload-zone:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:1}
+.upload-glyph{width:56px;height:56px;margin:0 auto 12px;border-radius:14px;background:var(--primary-glow);display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.upload-zone:hover .upload-glyph{background:var(--success-bg);box-shadow:0 0 30px var(--primary-glow);transform:scale(1.08)}
+.upload-glyph svg{width:26px;height:26px;color:var(--primary)}
+.upload-title{font-size:1rem;font-weight:600;color:var(--text)}
+.upload-hint{font-size:.75rem;color:var(--text-dim);margin-top:4px}
+.upload-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 32px);margin:0 16px 14px;padding:13px 20px;background:linear-gradient(135deg,var(--primary),var(--primary-dim));color:#0c1322;border:none;border-radius:var(--radius-sm);font-size:.9rem;font-weight:700;cursor:pointer;transition:all var(--transition);font-family:var(--font)}
+.upload-btn:hover{box-shadow:0 0 28px var(--primary-glow);transform:translateY(-1px)}
+.upload-btn:active{transform:translateY(0)}
+.upload-btn svg{width:18px;height:18px}
+
+/* ---- Preview / scanning ---- */
+.preview-card{overflow:hidden;margin-bottom:14px}
+.preview-image-wrap{position:relative;background:#000;aspect-ratio:1;max-height:320px}
+.preview-image{width:100%;height:100%;object-fit:cover;display:block}
+.scan-line{position:absolute;left:-10%;right:-10%;height:2px;background:linear-gradient(90deg,transparent,var(--primary),transparent);filter:blur(3px);box-shadow:0 0 20px var(--primary-glow);animation:scan 1.8s ease-in-out infinite;pointer-events:none;z-index:2}
+@keyframes scan{0%{top:-4%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:104%;opacity:0}}
+.preview-overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(12,19,34,0.7)100%);pointer-events:none;z-index:1}
+.preview-status{padding:16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:.85rem;color:var(--text-dim);background:var(--surface)}
+.spinner{width:18px;height:18px;border:2px solid var(--surface-border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Section headers ---- */
+.section-label{font-size:.7rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;font-family:var(--mono);margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--surface-border),transparent)}
+
+/* ---- Result cards ---- */
+.result-card{border-radius:var(--radius-sm);margin-bottom:8px;animation:cardIn .3s ease backwards}
+@keyframes cardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.result-card .card-body{padding:12px 16px}
+.result-card .card-header{padding:10px 16px 0}
+.result-card.disease{border-left:3px solid var(--danger)}
+.result-card.stage-card{border-left:3px solid var(--warning)}
+.result-card.confidence-card{border-left:3px solid var(--primary)}
+.result-card.details-card{border-left:3px solid var(--accent)}
+.result-card.crop-card{border-left:3px solid var(--primary)}
+
+/* Crop tag */
+.crop-tag{font-size:.62rem;font-weight:600;padding:2px 10px;border-radius:20px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-left:auto;flex-shrink:0}
+.crop-tag.rice{background:rgba(0,188,212,0.12);color:var(--accent);border:1px solid rgba(0,188,212,0.2)}
+.crop-tag.wheat{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(255,171,64,0.2)}
+
+/* Stage bar */
+.stage-bar-wrap{margin-top:10px}
+.stage-track{display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px}
+.stage-seg{flex:1;background:var(--surface-border);border-radius:2px;transition:all .5s cubic-bezier(0.4,0,0.2,1)}
+.stage-seg.early.active{background:var(--success);box-shadow:0 0 10px rgba(0,230,118,0.3)}
+.stage-seg.mid.active{background:var(--warning);box-shadow:0 0 10px rgba(255,171,64,0.3)}
+.stage-seg.late.active{background:var(--danger);box-shadow:0 0 10px rgba(255,82,82,0.3)}
+.stage-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:.58rem;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px}
+
+/* Confidence chart */
+.conf-chart{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.conf-row{display:grid;grid-template-columns:auto 1fr 34px;align-items:center;gap:8px}
+.conf-label{font-size:.7rem;color:var(--text-dim);font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;font-family:var(--mono)}
+.conf-track{height:12px;background:var(--surface-border);border-radius:6px;overflow:hidden;position:relative}
+.conf-fill{height:100%;border-radius:6px;transition:width .7s cubic-bezier(0.4,0,0.2,1);min-width:2px}
+.conf-fill.high{background:linear-gradient(90deg,var(--primary),#69f0ae)}
+.conf-fill.med{background:linear-gradient(90deg,var(--warning),#ffd180)}
+.conf-fill.low{background:var(--text-muted)}
+.conf-fill.pick{background:linear-gradient(90deg,var(--accent),#80deea);box-shadow:0 0 8px rgba(0,188,212,0.3)}
+.conf-pct{font-size:.65rem;color:var(--text-dim);font-weight:600;text-align:right;font-family:var(--mono)}
+
+/* Details list */
+.detail-list{list-style:none;margin-top:6px}
+.detail-list li{display:flex;align-items:flex-start;gap:8px;padding:3px 0;font-size:.78rem;color:var(--text-dim);line-height:1.5}
+.detail-list li::before{content:'';width:4px;height:4px;min-width:4px;margin-top:7px;border-radius:50%;background:var(--accent);opacity:.4}
+
+/* ---- Recommendation grid ---- */
+.rec-grid{display:grid;gap:8px}
+.rec-card{border-radius:var(--radius-sm);padding:14px 16px;animation:cardIn .3s ease backwards}
+.rec-card.bordered{border-left:3px solid}
+.rec-card.risk{border-left-color:var(--danger)}
+.rec-card.treatment{border-left-color:var(--primary)}
+.rec-card.dosage{border-left-color:var(--warning)}
+.rec-card.timing{border-left-color:var(--accent)}
+.rec-card.env{border-left-color:#7c4dff}
+.rec-card.cultural{border-left-color:var(--text-muted)}
+.rec-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.rec-badge{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rec-badge svg{width:14px;height:14px}
+.rec-badge.risk{background:var(--danger-bg);color:var(--danger)}
+.rec-badge.trt{background:var(--success-bg);color:var(--primary)}
+.rec-badge.dose{background:var(--warning-bg);color:var(--warning)}
+.rec-badge.time{background:var(--info-bg);color:var(--accent)}
+.rec-badge.wthr{background:rgba(124,77,255,0.12);color:#7c4dff}
+.rec-badge.cult{background:rgba(122,139,168,0.12);color:var(--text-dim)}
+.rec-label{font-size:.72rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-family:var(--mono)}
+.rec-body{font-size:.8rem;line-height:1.6;color:var(--text)}
+.rec-body strong{color:var(--text);font-weight:600}
+.rec-body .mono{font-family:var(--mono);font-size:.75rem}
+
+/* Weather */
+.weather-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.weather-cell{text-align:center;padding:8px 4px;background:var(--surface);border:1px solid var(--surface-border);border-radius:8px;transition:all var(--transition)}
+.weather-cell:hover{background:var(--surface-hover);border-color:var(--primary)}
+.weather-val{font-size:1rem;font-weight:700;color:var(--primary);font-family:var(--mono)}
+.weather-lbl{font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;font-family:var(--mono)}
+.weather-src{margin-top:6px;font-size:.62rem;color:var(--text-muted);font-family:var(--mono);text-align:center}
+
+/* Caveat */
+.caveat{display:none;background:var(--warning-bg);border:1px solid rgba(255,171,64,0.15);border-radius:var(--radius-sm);padding:10px 14px;font-size:.7rem;color:var(--warning);line-height:1.5;margin-top:12px;font-family:var(--mono)}
+
+/* Error */
+.error-state{padding:36px 20px;text-align:center}
+.error-badge{width:56px;height:56px;margin:0 auto 12px;border-radius:14px;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;color:var(--danger)}
+.error-badge svg{width:26px;height:26px}
+.error-state h3{font-size:1.05rem;font-weight:700;margin-bottom:4px}
+.error-state p{font-size:.8rem;color:var(--text-dim);margin-bottom:14px}
+.error-actions{display:flex;gap:8px;justify-content:center}
+.error-actions button{flex:1;max-width:160px;padding:11px 16px;border-radius:var(--radius-sm);font-size:.82rem;font-weight:600;cursor:pointer;transition:all var(--transition);font-family:var(--font)}
+.btn-retry{background:var(--primary);color:#0c1322;border:none}
+.btn-retry:hover{box-shadow:0 0 20px var(--primary-glow)}
+.btn-new{background:transparent;color:var(--text);border:1.5px solid var(--surface-border)}
+.btn-new:hover{border-color:var(--primary);color:var(--primary)}
+
+/* ---- History ---- */
+.history-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.history-stack{display:flex;flex-direction:column;gap:6px}
+.history-card{background:var(--surface);border:1px solid var(--surface-border);border-radius:var(--radius-sm);padding:10px 14px;cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:10px;animation:cardIn .3s ease backwards}
+.history-card:hover{border-color:var(--primary);background:var(--surface-hover)}
+.history-card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.history-thumb{width:36px;height:36px;border-radius:7px;object-fit:cover;flex-shrink:0;background:var(--surface-border)}
+.history-info{flex:1;min-width:0}
+.history-name{font-size:.82rem;font-weight:600;color:var(--text)}
+.history-meta{font-size:.65rem;color:var(--text-dim);margin-top:1px;display:flex;gap:6px;flex-wrap:wrap;font-family:var(--mono)}
+.history-empty{text-align:center;padding:40px 16px;color:var(--text-dim)}
+.history-empty svg{display:block;margin:0 auto 8px;opacity:.3}
+.history-empty p{font-size:.82rem}
+
+.btn-ghost{padding:6px 12px;background:transparent;color:var(--text-dim);border:1px solid var(--surface-border);border-radius:6px;font-size:.68rem;cursor:pointer;transition:all var(--transition);font-family:var(--mono)}
+.btn-ghost:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
+
+/* ---- About ---- */
+.about-wrap{line-height:1.7}
+.about-wrap h3{font-size:.95rem;font-weight:700;margin:16px 0 8px;color:var(--text)}
+.about-wrap p{font-size:.78rem;color:var(--text-dim);margin-bottom:6px;line-height:1.6}
+.about-wrap ul{list-style:none;margin:4px 0 8px}
+.about-wrap li{font-size:.76rem;color:var(--text-dim);padding:2px 0;display:flex;align-items:center;gap:7px}
+.about-wrap li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--primary);flex-shrink:0}
+.about-wrap ol{padding-left:16px;font-size:.78rem;color:var(--text-dim);margin:4px 0 8px}
+.about-wrap ol li{margin-bottom:4px;padding-left:2px}
+.about-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.about-stat{background:var(--surface);border:1px solid var(--surface-border);border-radius:8px;padding:12px;text-align:center}
+.about-stat-num{font-size:1.2rem;font-weight:800;color:var(--primary);font-family:var(--mono)}
+.about-stat-lbl{font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-top:1px;font-family:var(--mono)}
+
+/* ---- Bottom nav ---- */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--surface-border);display:flex;justify-content:space-around;padding:4px 0;max-width:480px;margin:0 auto;z-index:100;backdrop-filter:blur(12px)}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--text-muted);font-size:.6rem;padding:5px 18px;border-radius:8px;transition:all var(--transition);border:none;background:none;cursor:pointer;position:relative;font-family:var(--mono)}
+.nav-item.active,.nav-item:hover{color:var(--primary);background:var(--success-bg)}
+.nav-item .badge{position:absolute;top:0;right:10px;width:6px;height:6px;border-radius:50%;background:var(--danger);animation:pulse 1.5s infinite}
+.nav-icon{width:18px;height:18px}
+
+/* Toast */
+.toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--surface-border);color:var(--text);padding:10px 18px;border-radius:8px;font-size:.75rem;font-weight:500;z-index:200;animation:toastUp .25s ease;pointer-events:none;max-width:320px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.5);font-family:var(--mono)}
+@keyframes toastUp{from{opacity:0;transform:translateX(-50%)translateY(10px)}to{opacity:1;transform:translateX(-50%)translateY(0)}}
+.offline-banner{display:none;position:fixed;top:0;left:0;right:0;background:var(--danger);color:#fff;text-align:center;padding:4px;font-size:.68rem;font-weight:500;z-index:300;font-family:var(--mono)}
+
+/* Utils */
+.mono{font-family:var(--mono)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
+@media(max-width:380px){header{padding:20px 14px 14px}.header-title{font-size:1rem}.upload-zone{padding:40px 14px}}
+</style>
+</head>
+<body>
+<div class="offline-banner" id="offlineBanner">OFFLINE — weather unavailable</div>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-glow2" aria-hidden="true"></div>
+
+<header>
+  <div class="header-left">
+    <div class="header-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <div><div class="header-title">CropGuard<span>AI</span></div><div style="font-size:.62rem;color:var(--text-muted);font-family:var(--mono);margin-top:-1px">v1.0 &middot; smart diagnosis</div></div>
+  </div>
+  <div class="status-indicator" aria-live="polite"><span class="status-dot" id="statusDot"></span><span id="statusText">online</span></div>
+</header>
+
+<main>
+  <!-- ===== HOME ===== -->
+  <div class="page active" id="pageHome" role="tabpanel" aria-label="Home">
+    <div class="card upload-card">
+      <div class="upload-zone" id="dropZone" role="button" tabindex="0" aria-label="Select a leaf photo">
+        <input type="file" id="fileInput" accept="image/*" capture="environment" class="sr-only" aria-hidden="true">
+        <div class="upload-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+        <div class="upload-title">Select leaf photo</div>
+        <div class="upload-hint">tap &middot; drag & drop &middot; JPG / PNG</div>
+      </div>
+      <button class="upload-btn" id="cameraBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Take Photo</button>
+    </div>
+
+    <div class="card preview-card" id="previewSection" style="display:none" aria-label="Analyzing">
+      <div class="preview-image-wrap"><img class="preview-image" id="previewImage" alt=""><div class="scan-line" aria-hidden="true"></div><div class="preview-overlay"></div></div>
+      <div class="preview-status"><span class="spinner" role="status"></span><span id="statusMessage">Analyzing image...</span></div>
+    </div>
+
+    <section id="resultsSection" style="display:none" aria-label="Results">
+      <!-- Crop -->
+      <div class="card result-card crop-card"><div class="card-header"><div class="card-icon" style="background:var(--primary-glow);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l4-16m4 16l-4-16"/><path d="M3 12h18"/></svg></div><span class="card-label">Detected Crop</span><span class="crop-tag" id="cropTag"></span></div><div class="card-body"><div class="card-value" id="cropName">—</div><div class="card-sub" id="cropConf"></div></div></div>
+      <!-- Disease -->
+      <div class="card result-card disease"><div class="card-header"><div class="card-icon" style="background:var(--danger-bg);color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="card-label">Diagnosis</span></div><div class="card-body"><div class="card-value" id="diseaseName">—</div></div></div>
+      <!-- Stage -->
+      <div class="card result-card stage-card" id="stageCard" style="display:none"><div class="card-header"><div class="card-icon" style="background:var(--warning-bg);color:var(--warning)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><span class="card-label">Severity Stage</span></div><div class="card-body"><div class="card-value" id="stageName">—</div><div class="stage-bar-wrap"><div class="stage-track" id="stageTrack"><div class="stage-seg early"></div><div class="stage-seg mid"></div><div class="stage-seg late"></div></div><div class="stage-labels"><span>early</span><span>mid</span><span>late</span></div></div></div></div>
+      <!-- Confidence -->
+      <div class="card result-card confidence-card"><div class="card-header"><div class="card-icon" style="background:var(--success-bg);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><span class="card-label">Confidence Distribution</span></div><div class="card-body"><div class="conf-chart" id="confidenceChart" role="list"></div></div></div>
+      <!-- Symptoms -->
+      <div class="card result-card details-card"><div class="card-header"><div class="card-icon" style="background:var(--info-bg);color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div><span class="card-label">Key Symptoms</span></div><div class="card-body"><ul class="detail-list" id="symptomsList"></ul></div></div>
+
+      <div class="section-label">Recommendations</div>
+      <div class="rec-grid">
+        <div class="card rec-card risk bordered"><div class="rec-row"><div class="rec-badge risk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="rec-label">Risk</span></div><div class="rec-body"><strong id="riskLevel">—</strong><span id="riskReason"></span></div></div>
+        <div class="card rec-card treatment bordered"><div class="rec-row"><div class="rec-badge trt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg></div><span class="rec-label">Treatment</span></div><div class="rec-body"><strong id="treatmentAction">—</strong><br><span class="mono" style="color:var(--text-dim);font-size:.75rem" id="treatmentChemical"></span></div></div>
+        <div class="card rec-card dosage bordered"><div class="rec-row"><div class="rec-badge dose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div><span class="rec-label">Dosage</span></div><div class="rec-body rec-body mono" id="dosageContent">—</div></div>
+        <div class="card rec-card timing bordered"><div class="rec-row"><div class="rec-badge time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="rec-label">Timing</span></div><div class="rec-body rec-body mono" id="timingContent">—</div></div>
+        <div class="card rec-card env bordered"><div class="rec-row"><div class="rec-badge wthr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.61 5.61a8 8 0 1 1-11.22 0z"/></svg></div><span class="rec-label">Weather</span></div><div><div class="weather-grid" id="weatherGrid"><div class="weather-cell"><div class="weather-val" id="tempValue">—</div><div class="weather-lbl">&deg;C</div></div><div class="weather-cell"><div class="weather-val" id="humidityValue">—</div><div class="weather-lbl">humidity</div></div><div class="weather-cell"><div class="weather-val" id="rainValue">—</div><div class="weather-lbl">rain</div></div><div class="weather-cell"><div class="weather-val" id="windValue">—</div><div class="weather-lbl">wind</div></div></div><div class="weather-src" id="weatherSource"></div></div></div>
+        <div class="card rec-card cultural bordered"><div class="rec-row"><div class="rec-badge cult"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><span class="rec-label">Cultural Practices</span></div><ul class="detail-list" id="culturalList"></ul></div>
+      </div>
+      <div class="caveat" id="caveatBanner" role="alert"></div>
+
+      <div class="error-state" id="errorState">
+        <div class="error-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+        <h3>Analysis Failed</h3>
+        <p id="errorMessage">Unable to process the image.</p>
+        <p id="retryInfo" style="font-size:.75rem;color:var(--text-dim);margin-bottom:12px"></p>
+        <div class="error-actions"><button class="btn-retry" onclick="retryLastImage()">Retry</button><button class="btn-new" onclick="resetToUpload()">New Photo</button></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== HISTORY ===== -->
+  <div class="page" id="pageHistory" role="tabpanel" aria-label="History">
+    <div class="history-bar"><div class="section-label" style="margin:0">Scan History</div><button class="btn-ghost" id="clearHistoryBtn" style="display:none" onclick="clearHistory()">clear</button></div>
+    <div class="history-stack" id="historyList"><div class="history-empty" id="historyEmpty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><p>No scans recorded</p></div></div>
+  </div>
+
+  <!-- ===== ABOUT ===== -->
+  <div class="page" id="pageAbout" role="tabpanel" aria-label="About">
+    <div class="section-label" style="margin:0 0 12px">About</div>
+    <div class="card" style="padding:18px"><div class="about-wrap">
+      <p>CropGuard AI identifies crop diseases from a single leaf photo and provides treatment recommendations based on live weather conditions.</p>
+      <div class="about-stats" id="accuracyStats"><div class="about-stat"><div class="about-stat-num" id="riceAcc">—</div><div class="about-stat-lbl">rice accuracy</div></div><div class="about-stat"><div class="about-stat-num" id="wheatAcc">—</div><div class="about-stat-lbl">wheat accuracy</div></div></div>
+      <h3>Crops</h3>
+      <ul><li><strong>Rice</strong> — Bacterial Blight, Blast, Brown Spot, Tungro</li><li><strong>Wheat</strong> — Crown &amp; Root Rot, Leaf Rust, Loose Smut</li></ul>
+      <h3>Pipeline</h3>
+      <ol><li>Upload single leaf photo</li><li>Crop classifier (rice vs wheat)</li><li>Disease classifier (3-4 diseases + Healthy)</li><li>Severity stage (wheat only)</li><li>Live weather risk assessment</li><li>Treatment recommendation</li></ol>
+      <h3>Limitations</h3>
+      <ul><li>Rice staging not available</li><li>Heuristic — consult an agronomist</li><li>Best on single-leaf, plain backgrounds</li></ul>
+    </div></div>
+  </div>
+</main>
+
+<nav class="bottom-nav" role="tablist" aria-label="Navigation">
+  <button class="nav-item active" data-page="pageHome" role="tab" aria-selected="true" aria-controls="pageHome" aria-label="Home"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>HOME</span></button>
+  <button class="nav-item" data-page="pageHistory" role="tab" aria-selected="false" aria-controls="pageHistory" aria-label="History"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>HISTORY</span><span class="badge" id="historyBadge" style="display:none"></span></button>
+  <button class="nav-item" data-page="pageAbout" role="tab" aria-selected="false" aria-controls="pageAbout" aria-label="About"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>ABOUT</span></button>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const ps=$('previewSection'),rs=$('resultsSection');
+const dz=$('dropZone'),fi=$('fileInput'),cb=$('cameraBtn');
+const pi=$('previewImage'),sm=$('statusMessage');
+const es=$('errorState'),em=$('errorMessage'),ri=$('retryInfo');
+const cn=$('cropName'),ct=$('cropTag'),cc=$('cropConf'),dn=$('diseaseName');
+const sc=$('stageCard'),sn=$('stageName'),st=$('stageTrack');
+const cv=$('confidenceValue'),cch=$('confidenceChart');
+const sl=$('symptomsList'),rl=$('riskLevel'),rr=$('riskReason');
+const ta=$('treatmentAction'),tc=$('treatmentChemical');
+const dc=$('dosageContent'),tic=$('timingContent');
+const tv=$('tempValue'),hv=$('humidityValue'),rv=$('rainValue'),wv=$('windValue'),ws=$('weatherSource');
+const cul=$('culturalList'),cb2=$('caveatBanner'),ob=$('offlineBanner');
+const hl=$('historyList'),he=$('historyEmpty'),hb=$('historyBadge'),chb=$('clearHistoryBtn');
+
+let curFile=null,lastFile=null,lastResult=null,analyzing=false;
+
+document.addEventListener('DOMContentLoaded',()=>{
+  ['dragenter','dragover','dragleave','drop'].forEach(e=>dz.addEventListener(e,e=>e.preventDefault(),false));
+  ['dragenter','dragover'].forEach(e=>dz.addEventListener(e,()=>dz.classList.add('drag-over'),false));
+  ['dragleave','drop'].forEach(e=>dz.addEventListener(e,()=>dz.classList.remove('drag-over'),false));
+  dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])},false);
+  dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}});
+  dz.addEventListener('click',()=>fi.click());
+  fi.addEventListener('change',e=>{if(e.target.files.length)handleFile(e.target.files[0])});
+  cb.addEventListener('click',()=>fi.click());
+  document.querySelectorAll('.nav-item[data-page]').forEach(b=>b.addEventListener('click',()=>switchPage(b.dataset.page)));
+  checkHealth();loadHistory();checkNetwork();fetchAccuracy();
+});
+
+async function fetchAccuracy(){
+  try{
+    const r=await fetch('/model-info');const d=await r.json();
+    if(d.rice)$('riceAcc').textContent=Math.round(d.rice.val_accuracy*100)+'%';
+    if(d.wheat)$('wheatAcc').textContent=Math.round(d.wheat.val_accuracy*100)+'%';
+  }catch(e){}
+}
+
+function switchPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{const a=n.dataset.page===id;n.classList.toggle('active',a);n.setAttribute('aria-selected',a?'true':'false')});
+  if(id==='pageHistory')loadHistory();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function handleFile(f){
+  if(!f.type.startsWith('image/')){toast('Select an image file');return}
+  curFile=f;lastFile=f;
+  const r=new FileReader();
+  r.onload=e=>{
+    pi.src=e.target.result;
+    document.querySelector('.upload-card').style.display='none';
+    ps.style.display='block';rs.style.display='none';es.style.display='none';
+    sm.textContent='Analyzing image...';
+    analyzeImage(f);
+  };
+  r.readAsDataURL(f);
+}
+
+async function analyzeImage(f){
+  if(analyzing)return;
+  analyzing=true;
+  const fd=new FormData();fd.append('file',f);
+  try{
+    const res=await fetch('/analyze',{method:'POST',body:fd});
+    if(!res.ok){const e=await res.json();throw new Error(e.detail||'Failed')}
+    const d=await res.json();
+    lastResult=d;displayResults(d);saveHistory(d);
+  }catch(e){showError(e.message||'Analysis failed')}
+  finally{analyzing=false}
+}
+
+async function retryLastImage(){
+  if(!lastFile){resetToUpload();return}
+  es.style.display='none';document.querySelector('.upload-card').style.display='none';
+  ps.style.display='block';pi.src=URL.createObjectURL(lastFile);
+  sm.textContent='Retrying...';analyzing=false;
+  await analyzeImage(lastFile);
+}
+
+function displayResults(r){
+  ps.style.display='none';rs.style.display='block';es.style.display='none';
+  cn.textContent=r.detected_crop.charAt(0).toUpperCase()+r.detected_crop.slice(1);
+  ct.textContent=r.detected_crop;ct.className='crop-tag '+r.detected_crop;
+  cc.textContent='confidence: '+(r.crop_confidence*100).toFixed(1)+'%';
+  const healthy=r.disease==='Healthy';
+  dn.innerHTML=r.disease+(r.pathogen&&r.pathogen!=='None'?'<br><span style="font-size:.75rem;color:var(--text-dim);font-style:italic">'+r.pathogen+'</span>':'');
+  const hasStage=r.stage&&(r.detected_crop==='wheat'||r.detected_crop==='Wheat');
+  sc.style.display=healthy||!hasStage?'none':'block';
+  if(!healthy&&hasStage){
+    sn.textContent=r.stage?r.stage.charAt(0).toUpperCase()+r.stage.slice(1):'Unknown';
+    const stages=['early','mid','late'],idx=stages.indexOf(r.stage);
+    st.querySelectorAll('.stage-seg').forEach((s,i)=>{s.classList.toggle('active',i<=idx);s.style.flex=i<=idx?'1.2':'1';if(i===idx)s.style.boxShadow='0 0 10px var(--primary-glow)';else s.style.boxShadow='none'});
+  }
+  cv.textContent=Math.round(r.disease_confidence*100)+'%';
+  const probs=r.disease_probs||{},sorted=Object.entries(probs).sort((a,b)=>b[1]-a[1]),mv=sorted.length?Math.max(sorted[0][1],0.01):1;
+  cch.innerHTML='';
+  sorted.forEach(([cls,prob])=>{
+    const pct=Math.round(prob*100),pick=cls===r.disease;
+    const row=document.createElement('div');row.className='conf-row';row.setAttribute('role','listitem');
+    row.innerHTML='<span class="conf-label" title="'+cls.replace(/"/g,'&quot;')+'">'+cls+'</span><div class="conf-track"><div class="conf-fill '+(pick?'pick':pct>50?'high':pct>20?'med':'low')+'" style="width:'+Math.max(prob/mv*100,2)+'%"></div></div><span class="conf-pct">'+pct+'%</span>';
+    cch.appendChild(row);
+  });
+  sl.innerHTML='';(r.typical_symptoms||[]).forEach(s=>{sl.innerHTML+='<li>'+s+'</li>'});
+  rl.textContent=r.risk_level.charAt(0).toUpperCase()+r.risk_level.slice(1);
+  rl.style.color={high:'#ff5252',moderate:'#ffab40',low:'#00e676',unknown:'var(--text-dim)'}[r.risk_level]||'var(--text-dim)';
+  rr.textContent=r.risk_reason?' — '+r.risk_reason:'';
+  ta.textContent=r.treatment.action;tc.textContent=r.treatment.chemical;
+  dc.textContent=r.treatment.dosage;tic.textContent=r.treatment.timing;
+  if(r.weather){
+    tv.textContent=(r.weather.temperature_c?.toFixed(1)??'--')+'°';
+    hv.textContent=(r.weather.humidity_pct?.toFixed(0)??'--')+'%';
+    rv.textContent=(r.weather.rainfall_mm?.toFixed(1)??'--');
+    wv.textContent=(r.weather.wind_kph?.toFixed(0)??'--');
+    ws.textContent='source: '+(r.weather.source||'unknown');
+  }else{['tempValue','humidityValue','rainValue','windValue'].forEach(id=>$(id).textContent='—');ws.textContent='weather unavailable'}
+  cul.innerHTML='';(r.treatment.cultural||[]).forEach(p=>{cul.innerHTML+='<li>'+p+'</li>'});
+  if(r.caveats&&r.caveats.length){cb2.textContent=r.caveats.join(' ');cb2.style.display='block'}else{cb2.style.display='none'}
+
+  // re-trigger entrance animations
+  document.querySelectorAll('.result-card,.rec-card').forEach(el=>{el.style.animation='none';el.offsetHeight;el.style.animation=''});
+  setTimeout(()=>{document.querySelector('.result-card')?.focus()},100);
+}
+
+function showError(msg){
+  ps.style.display='none';rs.style.display='block';es.style.display='block';
+  document.querySelector('.upload-card').style.display='block';
+  em.textContent=msg;ri.textContent=lastFile?'Retry or upload a different photo':'';
+  analyzing=false;
+}
+
+function resetToUpload(){
+  document.querySelector('.upload-card').style.display='block';
+  ps.style.display='none';rs.style.display='none';es.style.display='none';
+  switchPage('pageHome');curFile=null;lastFile=null;lastResult=null;fi.value='';pi.src='';
+}
+
+function saveHistory(r){
+  if(!r)return;
+  const e={crop:r.detected_crop,disease:r.disease,confidence:r.disease_confidence,risk:r.risk_level,ts:Date.now(),thumb:pi.src};
+  let h=JSON.parse(localStorage.getItem('cg_history')||'[]');h.unshift(e);
+  if(h.length>15)h=h.slice(0,15);
+  localStorage.setItem('cg_history',JSON.stringify(h));
+  hb.style.display='block';setTimeout(()=>{hb.style.display='none'},3000);
+}
+
+function loadHistory(){
+  const h=JSON.parse(localStorage.getItem('cg_history')||'[]');
+  hl.innerHTML='';
+  if(!h.length){hl.innerHTML='<div class="history-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><p>No scans recorded</p></div>';chb.style.display='none';return}
+  chb.style.display='inline-flex';
+  h.forEach((e,i)=>{
+    const d=document.createElement('div');d.className='history-card';d.style.animationDelay=(i*.025)+'s';d.tabIndex=0;
+    const t=new Date(e.ts),ts=t.toLocaleDateString()+' '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    d.innerHTML='<img class="history-thumb" src="'+e.thumb+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"><div class="history-info"><div class="history-name">'+e.disease+'</div><div class="history-meta"><span>'+e.crop.toUpperCase()+'</span><span>'+Math.round(e.confidence*100)+'%</span><span>'+ts+'</span><span style="color:'+(e.risk==='high'?'var(--danger)':e.risk==='moderate'?'var(--warning)':'var(--success)')+'">'+e.risk+'</span></div></div>';
+    d.addEventListener('click',()=>switchPage('pageHome'));
+    d.addEventListener('keydown',e=>{if(e.key==='Enter')switchPage('pageHome')});
+    hl.appendChild(d);
+  });
+}
+
+function clearHistory(){
+  if(!confirm('Clear all history?'))return;
+  localStorage.removeItem('cg_history');loadHistory();toast('History cleared');
+}
+
+function checkNetwork(){
+  const u=()=>{const o=navigator.onLine;ob.style.display=o?'none':'block';$('statusDot').classList.toggle('offline',!o)};
+  window.addEventListener('online',u);window.addEventListener('offline',u);u();
+}
+
+async function checkHealth(){
+  try{const r=await fetch('/health');(await r.json()).status==='ok'?($('statusDot').style.background='var(--primary)',$('statusText').textContent='online'):setTimeout(checkHealth,3000)}
+  catch(e){setTimeout(checkHealth,3000)}
+}
+
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;t.setAttribute('role','status');document.body.appendChild(t);setTimeout(()=>t.remove(),3000)}
+</script>
+</body>
+</html>
