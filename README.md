@@ -17,20 +17,20 @@ All from a single photo. Zero dropdowns. Zero manual input.
 
 | Model | Classes | Architecture | Notes |
 |-------|---------|--------------|-------|
-| Crop Classifier | rice, wheat | MobileNetV2 | Binary, 97.6% test accuracy |
-| Rice Disease | Bacterial Blight, Blast, Brown Spot, Tungro, Healthy | MobileNetV2 | 5-class, includes Healthy |
-| Wheat Disease | Leaf Rust, Loose Smut, Crown & Root Rot, Healthy | MobileNetV2 | 4-class, Leaf Rust only 89 images |
-| Wheat Stage | early, mid, late | MobileNetV2 | Heuristic pseudo-labels (HSV lesion ratio terciles) |
+| Crop Classifier | rice, wheat | EfficientNet-B0 | Binary, 98.9% val accuracy |
+| Rice Disease | Bacterial Blight, Blast, Brown Spot, Healthy, Tungro | EfficientNet-B0 | 5-class, includes Healthy, 94.6% val accuracy |
+| Wheat Disease | Crown & Root Rot, Healthy, Leaf Rust, Loose Smut | EfficientNet-B0 | 4-class, 82.0% val accuracy |
+| Wheat Stage | early, mid, late | EfficientNet-B0 | Heuristic pseudo-labels (HSV lesion ratio terciles, computed globally across splits) |
 
-All models: ImageNet-pretrained MobileNetV2, two-stage transfer learning (frozen backbone → fine-tune last 3 blocks), 160×160 input, class-weighted loss.
+All models: ImageNet-pretrained EfficientNet-B0, two-phase transfer learning (frozen backbone → unfreeze last 7 blocks), 224×224 input, class-weighted loss with label smoothing. Accuracy figures are `max(val_acc)` from each model's `*_efficientnet_history.json`, served live by `/model-info` — the frontend displays these dynamically and they can never go stale.
 
-**Note:** Rice severity staging (early/mid/late) is **not available**. After two correction rounds (filtering non-photographic images, then close-up vs. field shots, then single-leaf framing), contact sheets still showed no consistent early→late progression for 3 of 4 rice diseases. Rather than train on labels that failed visual review, rice disease detection ships without automatic severity staging. `/analyze` returns `stage: null` for rice results, and the recommendation engine falls back to general (non-stage-specific) guidance, clearly marked as such. Wheat staging passed visual validation and works as designed.
+**Note:** Rice severity staging (early/mid/late) is **not available**. After multiple correction rounds (filtering non-photographic images, then close-up vs. field shots, then single-leaf framing, then per-split vs. global tercile boundaries), contact sheets still showed no consistent early→late progression for 3 of 4 rice diseases. Rather than train on labels that failed visual review, rice disease detection ships without automatic severity staging. `/analyze` returns `stage: null` for rice results, and the recommendation engine falls back to general (non-stage-specific) guidance, clearly marked as such. Wheat staging passed visual validation and works as designed.
 
 ## Data Sources (Real, Verified)
 
 - **Rice diseases**: Mendeley "Rice Leaf Disease Image Samples" (Sethy et al., 2020), mirrored at `maimunul/Rice-Leaf-Disease-Classification-using-CNN` on GitHub — 4,794 unique images after 19% dedup
 - **Rice Healthy**: Paddy Doctor dataset `normal` class from `ai-agriculture-circuits-and-systems/paddy_disease_classification` (sparse-cloned)
-- **Wheat**: `aadium/wheat-disease-detection` on GitHub (`cropDiseaseDataset/`) — 1,294 unique after 60% dedup. Leaf Rust only 89 images.
+- **Wheat**: multi-source — `musfiqurtuhin/BCDD`, `Saon110/bd-crop-vegetable-plant-disease-dataset`, `ashu010/agridrone-data`, `uqtwei2/PlantWild` (via `download_all_datasets.py`), deduplicated by MD5
 
 **All datasets deduplicated by MD5 hash before splitting.** Train/val/test = 70/15/15 stratified, seed=42.
 
@@ -38,8 +38,8 @@ All models: ImageNet-pretrained MobileNetV2, two-stage transfer learning (frozen
 
 | Issue | Impact | Mitigation |
 |-------|--------|------------|
-| Wheat Leaf Rust only 89 images | 74% test accuracy (vs 95% rice) | Reported honestly; more data needed |
-| Stage labels are **heuristic pseudo-labels**, not expert annotations | Stage accuracy ~78% rice / ~53% wheat (agreement with pseudo-labels, not ground truth) | Returned with explicit caveat in API response |
+| Wheat disease model at 82.0% val (vs 94.6% rice) | Multi-source wheat data is noisier than rice | Reported honestly; mapping bugs (Powdery Mildew→Loose Smut, Septoria→Crown & Root Rot) fixed in `download_all_datasets.py`; retrained on corrected classes |
+| Stage labels are **heuristic pseudo-labels**, not expert annotations | Stage accuracy ~60% wheat (agreement with pseudo-labels, not ground truth) | Returned with explicit caveat in API response |
 | No antiviral for Tungro; no foliar rescue for Loose Smut or Crown/Root Rot | Recommendations correctly state "no effective in-season treatment" | Knowledge base encodes this explicitly; unit tests assert it |
 | Weather via IP geolocation (approx. city-level) | Less precise than GPS | Acceptable for regional risk; graceful fallback if offline |
 | **Rice severity staging disabled** | No automatic early/mid/late for rice | `/analyze` returns `stage: null` for rice; recommendation falls back to general guidance with explicit caveat |
@@ -68,21 +68,17 @@ python scripts/split_data.py
 python scripts/generate_stage_labels.py
 
 # Train all 4 models (resumable, checkpointed)
-python scripts/train_all.py --model crop --epochs 20
-python scripts/train_all.py --model wheat --epochs 20
-python scripts/train_all.py --model wheat_stage --epochs 20
-python scripts/train_all.py --model rice --epochs 20
+python scripts/train_efficientnet.py --model crop --epochs 20
+python scripts/train_efficientnet.py --model wheat --epochs 20
+python scripts/train_efficientnet.py --model wheat_stage --epochs 20
+python scripts/train_efficientnet.py --model rice --epochs 20
 # No rice_stage model -- automatic staging disabled for rice (see limitations)
 ```
 
 ### Training Notes
-- Each `train_all.py` saves a checkpoint every epoch (`models/<name>_checkpoint.pt`)
+- Each `train_efficientnet.py` run saves a checkpoint every epoch (`models/<name>_efficientnet_checkpoint.pt`)
 - If interrupted, re-run with `--resume` to continue
-- Default: 20 epochs (4 frozen + 16 fine-tune, with early stopping)
-- Two-phase training: epochs 1-4 frozen backbone, epochs 5+ unfreeze last 3 blocks
-- Each `train_resumable.py` saves a checkpoint every epoch (`models/<name>_checkpoint.pt`)
-- If interrupted, re-run with `--resume` to continue
-- Default: 4 epochs frozen + 3 epochs fine-tune; adjust with `--epochs1` `--epochs2`
+- Default: 20 epochs (8 frozen + 12 fine-tune), two-phase: epochs 1-8 frozen backbone, epochs 9+ unfreeze last 7 blocks at LR 2e-5
 
 ## Project Structure
 ```
@@ -95,23 +91,23 @@ cropguard_ai/
 │   ├── split/rice/, split/wheat/     # 70/15/15 splits
 │   └── stage_labels/                 # Heuristic stage labels + validation grids
 ├── scripts/
-│   ├── download_rice.py
-│   ├── download_wheat.py
+│   ├── download_all_datasets.py       # Multi-source dataset download + splits
 │   ├── split_data.py
-│   ├── generate_stage_labels.py
-│   └── train_resumable.py
+│   ├── generate_hsv_stage_labels.py   # HSV lesion-ratio stage labels (global terciles)
+│   └── train_efficientnet.py          # Two-phase EfficientNet-B0 training
 ├── cropguard/
 │   ├── inference.py                   # Model loading + prediction
 │   ├── api/
 │   │   ├── main.py                    # FastAPI endpoints
 │   │   └── static/index.html          # Frontend (single-file)
 │   ├── recommend/
-│   │   ├── knowledge_base.py          # Disease/treatment data
-│   │   └── engine.py                  # Recommendation logic + weather risk
+│   │   └── engine.py                  # Recommendation logic + weather risk (canonical)
+│   ├── knowledge/
+│   │   └── knowledge_base.py          # Disease/treatment data (single source of truth)
 │   └── weather/
 │       └── client.py                  # Open-Meteo + IP geolocation
 └── tests/
-    └── test_recommend.py              # 16 unit tests
+    └── test_recommend.py              # 20 unit tests
 ```
 
 ## API Endpoints
@@ -119,6 +115,7 @@ cropguard_ai/
 | Endpoint | Description |
 |----------|-------------|
 | `GET /health` | Model availability + server status |
+| `GET /model-info` | Live val accuracy from history JSONs (frontend About section) |
 | `POST /predict?crop=rice\|wheat` | Single-crop disease prediction |
 | `POST /recommend` | Recommendation from disease+stage+weather |
 | `POST /analyze` | **Main**: image → full pipeline result |
