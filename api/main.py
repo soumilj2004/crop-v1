@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import io
+import json
 from PIL import Image
 
 from inference import get_model_manager, ModelManager
@@ -25,6 +26,7 @@ app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 # Global model manager
 model_manager: Optional[ModelManager] = None
+MODELS_DIR = Path(__file__).parent.parent / "models"
 
 
 @app.on_event("startup")
@@ -42,7 +44,7 @@ async def health_check():
     return {
         "status": "ok",
         "models": model_manager.health_check(),
-        "device": str(model_manager._models.get("crop_classifier", {}).next().device) if model_manager._models else "unknown"
+        "device": "cpu"  # simplified for now
     }
 
 
@@ -162,6 +164,9 @@ class AnalyzeResponse(BaseModel):
     disease: str
     disease_confidence: float
     disease_probs: Dict[str, float]
+    # Pathogen info
+    pathogen: Optional[str] = None
+    typical_symptoms: List[str] = []
     # Stage (if diseased)
     stage: Optional[str]
     stage_confidence: Optional[float]
@@ -231,6 +236,8 @@ async def analyze(file: UploadFile = File(...)):
         disease=disease,
         disease_confidence=disease_conf,
         disease_probs=disease_probs,
+        pathogen=result.pathogen,
+        typical_symptoms=result.typical_symptoms,
         stage=stage,
         stage_confidence=stage_conf,
         stage_probs=stage_probs,
@@ -263,13 +270,26 @@ async def serve_frontend():
     return HTMLResponse(content="<h1>CropGuard AI</h1><p>Frontend not built yet</p>", status_code=200)
 
 
+@app.get("/model-info")
+async def model_info():
+    """Live accuracy numbers from history files — never stale."""
+    info = {}
+    for name in ["crop", "rice", "wheat"]:
+        history_path = MODELS_DIR / f"{name}_efficientnet_history.json"
+        if history_path.exists():
+            with open(history_path) as f:
+                h = json.load(f)
+            info[name] = {"val_accuracy": max(h.get("val_acc", [0.0]))}
+    return info
+
+
 @app.get("/diseases")
 async def list_diseases(crop: str):
     """List supported diseases for a crop."""
     if crop == "rice":
         return {
             "crop": "rice",
-            "diseases": ["Bacterial Blight", "Blast", "Healthy", "Tungro"]
+            "diseases": ["Bacterial Blight", "Blast", "Brown Spot", "Healthy", "Tungro"]
         }
     elif crop == "wheat":
         return {

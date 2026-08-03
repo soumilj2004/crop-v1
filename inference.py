@@ -87,14 +87,14 @@ class ModelManager:
         "crop": load_model,
         "rice": load_model,
         "wheat": load_model,
-        "wheat_stage": load_mobilenet_model,
+        "wheat_stage": load_model,
     }
 
     REQUIRED_MODELS = {
         "crop": "crop_efficientnet_best.pt",
         "rice": "rice_efficientnet_best.pt",
         "wheat": "wheat_efficientnet_best.pt",
-        "wheat_stage": "wheat_stage_classifier.pt",
+        "wheat_stage": "wheat_stage_efficientnet_best.pt",
         # rice_stage intentionally omitted -- see README "Known Limitations"
     }
     
@@ -126,9 +126,9 @@ class ModelManager:
         return self._models["crop"], self._class_maps["crop"]
     
     def get_rice_classifier(self):
-        """Rice disease classifier (4 classes including Healthy)."""
-        classes = ["Bacterial Blight", "Blast", "Healthy", "Tungro"]
-        self._load_model("rice", self.REQUIRED_MODELS["rice"], 4, classes)
+        """Rice disease classifier (5 classes including Brown Spot)."""
+        classes = ["Bacterial Blight", "Blast", "Brown Spot", "Healthy", "Tungro"]
+        self._load_model("rice", self.REQUIRED_MODELS["rice"], 5, classes)
         return self._models["rice"], self._class_maps["rice"]
     
     def get_wheat_classifier(self):
