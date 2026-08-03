@@ -42,10 +42,13 @@ class TestRecommendationEngine:
             assert "Tricyclazole" in result.treatment.chemical or "Isoprothiolane" in result.treatment.chemical
             assert result.treatment.action
     
-    def test_rice_brown_spot_excluded(self, engine):
-        """Brown Spot was removed due to confusability with Blast."""
-        with pytest.raises(ValueError, match="Unknown disease class for rice: Brown Spot"):
-            engine.get_recommendation("rice", "Brown Spot", "mid", 0.88)
+    def test_rice_brown_spot(self, engine):
+        """Brown Spot is supported (knowledge base includes it)."""
+        for stage in [Stage.EARLY, Stage.MID, Stage.LATE]:
+            result = engine.get_recommendation("rice", "Brown Spot", stage.value, 0.88)
+            assert result.disease_name == "Brown Spot"
+            assert result.disease_type == DiseaseType.FUNGAL.value
+            assert result.treatment.action
     
     def test_rice_tungro_all_stages(self, engine):
         """Test Tungro (viral) - no antiviral treatment exists."""

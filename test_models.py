@@ -42,8 +42,8 @@ crop_classes = ['rice', 'wheat']
 print(f'Crop classifier: pred={crop_classes[pred.item()]}, probs={probs[0].tolist()}')
 
 # Rice classifier
-rice_model = load_efficientnet(models_dir / "rice_efficientnet_best.pt", 4)
-rice_classes = ['Bacterial Blight', 'Blast', 'Healthy', 'Tungro']
+rice_model = load_efficientnet(models_dir / "rice_efficientnet_best.pt", 5)
+rice_classes = ['Bacterial Blight', 'Blast', 'Brown Spot', 'Healthy', 'Tungro']
 img = Image.open('data/split/rice/train/Blast/100004.jpg').convert('RGB')
 x = transform(img).unsqueeze(0)
 with torch.no_grad():
