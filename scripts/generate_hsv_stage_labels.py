@@ -18,8 +18,8 @@ def lesion_ratio(img_path):
     return float((is_leaf_pixel & ~is_green).sum() / leaf_px)
 
 DISEASES = {
-    "wheat": ["Crown & Root Rot", "Leaf Rust", "Loose Smut"],
-    "rice": ["Bacterial Blight", "Blast", "Brown Spot", "Tungro"],
+    "wheat": ["Crown & Root Rot", "Healthy", "Leaf Rust", "Loose Smut"],
+    "rice": ["Bacterial Blight", "Blast", "Brown Spot", "Healthy", "Tungro"],
 }
 
 def generate_labels(crop):

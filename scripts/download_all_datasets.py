@@ -290,8 +290,8 @@ def download_wheat_dataset():
             "Wheat___Brown_rust": "Leaf Rust",
             "Wheat___Yellow_rust": "Leaf Rust",
             "Wheat___Healthy": "Healthy",
-            "Wheat___Powdery_mildew": "Loose Smut",  # Closest match
-            "Wheat___Septoria": "Crown & Root Rot",  # Closest match
+            "Wheat___Powdery_mildew": "Powdery Mildew",
+            "Wheat___Septoria": "Septoria",
             "Wheat___Black_rust": "Leaf Rust",
         }
 
@@ -353,7 +353,7 @@ def download_wheat_dataset():
             "Wheat_Leaf_Rust": "Leaf Rust",
             "Wheat_Brown_Rust": "Leaf Rust",
             "Wheat_Yellow_Rust": "Leaf Rust",
-            "Wheat_Powdery_Mildew": "Loose Smut",
+            "Wheat_Powdery_Mildew": "Powdery Mildew",
             "Wheat_Smut": "Loose Smut",
             "Wheat_Loose_Smut": "Loose Smut",
             "Wheat_Black_Smut": "Loose Smut",
@@ -390,7 +390,9 @@ def download_wheat_dataset():
                             our_class = "Healthy"
                         elif any(x in label_lower for x in ["rust", "leaf"]):
                             our_class = "Leaf Rust"
-                        elif any(x in label_lower for x in ["smut", "mildew"]):
+                        elif "mildew" in label_lower:
+                            our_class = "Powdery Mildew"
+                        elif "smut" in label_lower:
                             our_class = "Loose Smut"
                         elif "rot" in label_lower:
                             our_class = "Crown & Root Rot"
@@ -814,7 +816,7 @@ def main():
 
     create_splits("rice", rice_classes)
     create_splits("wheat", wheat_classes)
-    create_crop_splits()
+    # DEPRECATED: create_crop_splits() — crop is determined by user input, not ML.
     create_stage_splits("rice", rice_classes)
     create_stage_splits("wheat", wheat_classes)
 

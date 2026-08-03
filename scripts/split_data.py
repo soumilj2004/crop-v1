@@ -243,12 +243,13 @@ def main():
     # Split wheat
     split_dataset("wheat", WHEAT_CLASSES)
     
-    # Create crop classifier dataset
-    create_crop_split()
+    # DEPRECATED: Crop classifier dataset is redundant — crop is determined by user input in the app.
+    # Keeping only stage splits.
+    # create_crop_split()
     
     # Create stage splits (requires stage labels to exist)
-    create_stage_splits("rice", ["Bacterial Blight", "Blast", "Brown Spot", "Tungro"])
-    create_stage_splits("wheat", ["Leaf Rust", "Loose Smut", "Crown & Root Rot"])
+    create_stage_splits("rice", ["Bacterial Blight", "Blast", "Brown Spot", "Healthy", "Tungro"])
+    create_stage_splits("wheat", ["Crown & Root Rot", "Healthy", "Leaf Rust", "Loose Smut"])
     
     print("\n" + "=" * 60)
     print("ALL SPLITS COMPLETE")

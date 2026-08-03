@@ -88,8 +88,10 @@ def download_plantvillage():
                 elif "healthy" in label:
                     cls = "Healthy"
                 elif "powdery" in label or "mildew" in label:
-                    cls = "Loose Smut"
-                elif "septoria" in label or "spot" in label or "blight" in label:
+                    cls = "Powdery Mildew"
+                elif "septoria" in label:
+                    cls = "Septoria"
+                elif "spot" in label or "blight" in label:
                     cls = "Crown & Root Rot"
 
             if cls:
@@ -228,8 +230,8 @@ def download_agridrone():
             "wheat_aphid": "Crown & Root Rot",
             "fusarium_head_blight": "Crown & Root Rot",
             "leaf_blight": "Crown & Root Rot",
-            "powdery_mildew": "Loose Smut",
-            "septoria": "Crown & Root Rot",
+            "powdery_mildew": "Powdery Mildew",
+            "septoria": "Septoria",
             "tan_spot": "Crown & Root Rot",
         }
 
