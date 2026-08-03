@@ -1,6 +1,6 @@
 # CropGuard AI
 
-AI-based crop disease detection and recommendation system for rice and wheat. Runs as a local desktop app — no cloud, no account, no manual crop/stage selection.
+AI-based crop disease detection and recommendation engine for rice and wheat. Runs as a local desktop app — no cloud, no account, no manual crop/stage selection.
 
 ## What it does
 
