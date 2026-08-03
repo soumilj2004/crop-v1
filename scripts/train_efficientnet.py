@@ -8,9 +8,19 @@ import os, sys, json, time, argparse, random
 from pathlib import Path
 from collections import Counter
 
-_log_file = open("C:/CropGuardAI/training_script.log", "a", buffering=1)
-sys.stdout = _log_file
-sys.stderr = _log_file
+import time, os
+_log_path = "C:/CropGuardAI/training_script.log"
+# Try to open; if locked, use a PID-suffixed path
+try:
+    _log_file = open(_log_path, "a", buffering=1)
+except PermissionError:
+    _log_path = f"C:/CropGuardAI/training_{os.getpid()}.log"
+    _log_file = open(_log_path, "a", buffering=1)
+
+# Redirect stdout/stderr to log file only when run directly (not at import time)
+if __name__ == "__main__":
+    sys.stdout = _log_file
+    sys.stderr = _log_file
 
 import torch
 import torch.nn as nn
@@ -32,28 +42,36 @@ except Exception:
 import warnings
 warnings.filterwarnings("ignore", message="Palette images with Transparency")
 
-BASE = Path("C:/CropGuardAI/cropguard_ai")
+BASE = Path(os.environ.get("CROPGUARD_BASE", "C:/CropGuardAI/cropguard_ai"))
 MODELS_DIR = BASE / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 BATCH_SIZE = 32
-NUM_WORKERS = 0
+NUM_WORKERS = 2
 INPUT_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if DEVICE.type == "cuda":
+    BATCH_SIZE = 64
+    NUM_WORKERS = 4
+else:
+    torch.set_num_threads(4)
 SEED = 42
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
 
-# Wheat: 3 diseases + Healthy | Rice: 3 diseases + Healthy
+# Wheat: 3 diseases + Healthy | Rice: 4 diseases + Healthy
 DISEASE_CLASSES = {
     "wheat": ["Crown & Root Rot", "Healthy", "Leaf Rust", "Loose Smut"],
-    "rice": ["Bacterial Blight", "Blast", "Healthy", "Tungro"],
+    "rice": ["Bacterial Blight", "Blast", "Brown Spot", "Healthy", "Tungro"],
+    "wheat_stage": ["early", "mid", "late"],
+    "rice_stage": ["early", "mid", "late"],
 }
-# Dropped: Brown Spot (too similar to Blast)
 ALL_CLASSES = {
     "wheat": DISEASE_CLASSES["wheat"],
     "rice": DISEASE_CLASSES["rice"],
     "crop": ["rice", "wheat"],
+    "wheat_stage": DISEASE_CLASSES["wheat_stage"],
+    "rice_stage": DISEASE_CLASSES["rice_stage"],
 }
 
 def get_transforms(phase="train"):
@@ -134,7 +152,7 @@ class CropDataset(Dataset):
         return img, label
 
 def get_dataset(model_name, split, transform):
-    if model_name in ("wheat", "rice"):
+    if model_name in ("wheat", "rice", "wheat_stage", "rice_stage"):
         return DiseaseDataset(model_name, split, transform)
     elif model_name == "crop":
         return CropDataset(split, transform)
@@ -188,15 +206,36 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=-1))
 
-def train_one_epoch(model, loader, criterion, optimizer, ep_str=""):
+def cutmix_batch(imgs, labels, alpha=1.0):
+    """CutMix: replace a rectangular patch of each image with another image's patch."""
+    lam = float(np.random.beta(alpha, alpha))
+    idx = torch.randperm(imgs.size(0))
+    shuffled_imgs, shuffled_labels = imgs[idx], labels[idx]
+    _, _, h, w = imgs.shape
+    cut_h = int(h * np.sqrt(1.0 - lam))
+    cut_w = int(w * np.sqrt(1.0 - lam))
+    cx = np.random.randint(h)
+    cy = np.random.randint(w)
+    x1 = max(0, cx - cut_h // 2); x2 = min(h, cx + cut_h // 2)
+    y1 = max(0, cy - cut_w // 2); y2 = min(w, cy + cut_w // 2)
+    imgs_mix = imgs.clone()
+    imgs_mix[:, :, x1:x2, y1:y2] = shuffled_imgs[:, :, x1:x2, y1:y2]
+    return imgs_mix, labels, shuffled_labels, lam
+
+def train_one_epoch(model, loader, criterion, optimizer, ep_str="", use_cutmix=False, cutmix_prob=0.5):
     model.train()
     total_loss, correct, total = 0, 0, 0
     n = len(loader)
     for i, (imgs, labels) in enumerate(loader):
         imgs, labels = imgs.to(DEVICE), labels.to(DEVICE)
         optimizer.zero_grad()
-        outputs = model(imgs)
-        loss = criterion(outputs, labels)
+        if use_cutmix and np.random.rand() < cutmix_prob:
+            imgs, labels, shuffled, lam = cutmix_batch(imgs, labels)
+            outputs = model(imgs)
+            loss = lam * criterion(outputs, labels) + (1.0 - lam) * criterion(outputs, shuffled)
+        else:
+            outputs = model(imgs)
+            loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * imgs.size(0)
@@ -220,7 +259,7 @@ def validate(model, loader, criterion):
             total += imgs.size(0)
     return total_loss / total, correct / total
 
-def train(model_name, max_epochs=20, unfreeze_n=7, phase2_lr=2e-5, phase1_epochs=8):
+def train(model_name, max_epochs=20, unfreeze_n=7, phase2_lr=2e-5, phase1_epochs=8, resume=False):
     num_classes = len(ALL_CLASSES[model_name])
     best_path = MODELS_DIR / f"{model_name}_efficientnet_best.pt"
     ckpt_path = MODELS_DIR / f"{model_name}_efficientnet_checkpoint.pt"
@@ -239,36 +278,57 @@ def train(model_name, max_epochs=20, unfreeze_n=7, phase2_lr=2e-5, phase1_epochs
 
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-
-    # Phase 1: frozen backbone
-    model = build_model(num_classes)
     class_weights = compute_class_weight(train_ds)
-    base_criterion = nn.CrossEntropyLoss(weight=class_weights)
     criterion = LabelSmoothingLoss(num_classes, smoothing=0.1)
-    optimizer = optim.AdamW(get_trainable(model), lr=1e-3, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=1e-6)
 
-    # Load the real best-ever score from disk so retrains don't silently overwrite better checkpoints
-    best_acc = 0.0
     history_path = MODELS_DIR / f"{model_name}_efficientnet_history.json"
-    if history_path.exists():
-        with open(history_path) as f:
-            prior = json.load(f)
-        prior_best = max(prior.get("val_acc", [0.0]))
-        if prior_best > best_acc:
-            best_acc = prior_best
-            print(f"  Loaded existing best from disk: {best_acc:.4f}")
-    phase = 1
-    history = {"phase": [], "train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
 
-    for epoch in range(max_epochs):
+    if resume and ckpt_path.exists():
+        ckpt = torch.load(ckpt_path, map_location=DEVICE)
+        start_epoch = ckpt["epoch"] + 1
+        phase = ckpt["phase"]
+        best_acc = ckpt["best_acc"]
+        model = build_model(num_classes)
+        if phase == 2:
+            unfreeze_last_n(model, n=unfreeze_n)
+        model.load_state_dict(ckpt["model_state_dict"])
+        if phase == 1:
+            optimizer = optim.AdamW(get_trainable(model), lr=1e-3, weight_decay=1e-4)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=1e-6)
+        else:
+            optimizer = optim.AdamW(get_trainable(model), lr=phase2_lr, weight_decay=1e-4)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs - phase1_epochs, eta_min=1e-7)
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        for _ in range(start_epoch):
+            scheduler.step()
+        if history_path.exists():
+            history = json.load(open(history_path))
+        else:
+            history = {"phase": [], "train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
+        print(f"  Resumed from epoch {start_epoch+1}/{max_epochs}, phase {phase}, best {best_acc:.4f}")
+    else:
+        model = build_model(num_classes)
+        phase = 1
+        best_acc = 0.0
+        start_epoch = 0
+        history = {"phase": [], "train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
+        if history_path.exists():
+            with open(history_path) as f:
+                prior = json.load(f)
+            prior_best = max(prior.get("val_acc", [0.0]))
+            if prior_best > best_acc:
+                best_acc = prior_best
+                print(f"  Loaded existing best from disk: {best_acc:.4f}")
+        optimizer = optim.AdamW(get_trainable(model), lr=1e-3, weight_decay=1e-4)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=1e-6)
+
+    for epoch in range(start_epoch, max_epochs):
         if epoch == phase1_epochs and phase == 1:
             print(f"  >>> Phase 2: unfreezing last {unfreeze_n} blocks, LR -> {phase2_lr:.0e}")
             unfreeze_last_n(model, n=unfreeze_n)
             phase = 2
             optimizer = optim.AdamW(get_trainable(model), lr=phase2_lr, weight_decay=1e-4)
             scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs - phase1_epochs, eta_min=1e-7)
-            # Load persisted best from disk again (in case phase-1 improved it), don't reset to 0
             if history_path.exists():
                 with open(history_path) as f:
                     prior = json.load(f)
@@ -279,7 +339,7 @@ def train(model_name, max_epochs=20, unfreeze_n=7, phase2_lr=2e-5, phase1_epochs
 
         t0 = time.time()
         ep_str = f"Ep{epoch+1}P{phase}"
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, ep_str)
+        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, ep_str, use_cutmix=True)
         val_loss, val_acc = validate(model, val_loader, criterion)
         scheduler.step()
 
@@ -321,10 +381,11 @@ def train(model_name, max_epochs=20, unfreeze_n=7, phase2_lr=2e-5, phase1_epochs
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, choices=["wheat", "rice", "crop"])
+    parser.add_argument("--model", required=True, choices=["wheat", "rice", "crop", "wheat_stage", "rice_stage"])
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--unfreeze", type=int, default=7, help="Number of blocks to unfreeze")
     parser.add_argument("--phase2_lr", type=float, default=2e-5, help="Phase 2 learning rate")
     parser.add_argument("--phase1_epochs", type=int, default=8, help="Epochs in phase 1 (frozen)")
+    parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
     args = parser.parse_args()
-    train(args.model, args.epochs, args.unfreeze, args.phase2_lr, args.phase1_epochs)
+    train(args.model, args.epochs, args.unfreeze, args.phase2_lr, args.phase1_epochs, args.resume)
