@@ -13,3 +13,7 @@ training_script.log
 colab_pkg/
 gpu_pkg_wheat/
 cropguard_colab.ipynb
+models/
+logs/
+*.bak
+wheat_*_log.txt
