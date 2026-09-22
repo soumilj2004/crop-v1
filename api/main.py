@@ -270,6 +270,26 @@ async def serve_frontend():
     return HTMLResponse(content="<h1>CropGuard AI</h1><p>Frontend not built yet</p>", status_code=200)
 
 
+@app.get("/weather")
+async def weather_now():
+    """Live weather for the caller's approximate location (read-only).
+
+    Additive endpoint: nothing else depends on it. Used by the concept-preview page
+    so that page can show real conditions and a real risk assessment.
+    """
+    w = fetch_live_weather()
+    if not w:
+        return {"available": False}
+    return {
+        "available": True,
+        "temperature_c": w.temperature_c,
+        "humidity_pct": w.humidity_pct,
+        "rainfall_mm": w.rainfall_mm,
+        "wind_kph": w.wind_kph,
+        "source": w.source,
+    }
+
+
 @app.get("/model-info")
 async def model_info():
     """Live accuracy numbers from history files — never stale."""
