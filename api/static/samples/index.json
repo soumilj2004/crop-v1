@@ -1,0 +1,114 @@
+{
+ "rice": {
+  "Bacterial Blight": [
+   "Bacterial_Blight_01.jpg",
+   "Bacterial_Blight_02.jpg",
+   "Bacterial_Blight_03.jpg",
+   "Bacterial_Blight_04.jpg",
+   "Bacterial_Blight_05.jpg",
+   "Bacterial_Blight_06.jpg",
+   "Bacterial_Blight_07.jpg",
+   "Bacterial_Blight_08.jpg",
+   "Bacterial_Blight_09.jpg",
+   "Bacterial_Blight_10.jpg"
+  ],
+  "Blast": [
+   "Blast_01.jpg",
+   "Blast_02.jpg",
+   "Blast_03.jpg",
+   "Blast_04.jpg",
+   "Blast_05.jpg",
+   "Blast_06.jpg",
+   "Blast_07.jpg",
+   "Blast_08.jpg",
+   "Blast_09.jpg",
+   "Blast_10.jpg"
+  ],
+  "Brown Spot": [
+   "Brown_Spot_01.jpg",
+   "Brown_Spot_02.jpg",
+   "Brown_Spot_03.jpg",
+   "Brown_Spot_04.jpg",
+   "Brown_Spot_05.jpg",
+   "Brown_Spot_06.jpg",
+   "Brown_Spot_07.jpg",
+   "Brown_Spot_08.jpg",
+   "Brown_Spot_09.jpg",
+   "Brown_Spot_10.jpg"
+  ],
+  "Healthy": [
+   "Healthy_01.jpg",
+   "Healthy_02.jpg",
+   "Healthy_03.jpg",
+   "Healthy_04.jpg",
+   "Healthy_05.jpg",
+   "Healthy_06.jpg",
+   "Healthy_07.jpg",
+   "Healthy_08.jpg",
+   "Healthy_09.jpg",
+   "Healthy_10.jpg"
+  ],
+  "Tungro": [
+   "Tungro_01.jpg",
+   "Tungro_02.jpg",
+   "Tungro_03.jpg",
+   "Tungro_04.jpg",
+   "Tungro_05.jpg",
+   "Tungro_06.jpg",
+   "Tungro_07.jpg",
+   "Tungro_08.jpg",
+   "Tungro_09.jpg",
+   "Tungro_10.jpg"
+  ]
+ },
+ "wheat": {
+  "Crown & Root Rot": [
+   "Crown_and_Root_Rot_01.jpg",
+   "Crown_and_Root_Rot_02.jpg",
+   "Crown_and_Root_Rot_03.jpg",
+   "Crown_and_Root_Rot_04.jpg",
+   "Crown_and_Root_Rot_05.jpg",
+   "Crown_and_Root_Rot_06.jpg",
+   "Crown_and_Root_Rot_07.jpg",
+   "Crown_and_Root_Rot_08.jpg",
+   "Crown_and_Root_Rot_09.jpg",
+   "Crown_and_Root_Rot_10.jpg"
+  ],
+  "Healthy": [
+   "Healthy_01.jpg",
+   "Healthy_02.jpg",
+   "Healthy_03.jpg",
+   "Healthy_04.jpg",
+   "Healthy_05.jpg",
+   "Healthy_06.jpg",
+   "Healthy_07.jpg",
+   "Healthy_08.jpg",
+   "Healthy_09.jpg",
+   "Healthy_10.jpg"
+  ],
+  "Leaf Rust": [
+   "Leaf_Rust_01.jpg",
+   "Leaf_Rust_02.jpg",
+   "Leaf_Rust_03.jpg",
+   "Leaf_Rust_04.jpg",
+   "Leaf_Rust_05.jpg",
+   "Leaf_Rust_06.jpg",
+   "Leaf_Rust_07.jpg",
+   "Leaf_Rust_08.jpg",
+   "Leaf_Rust_09.jpg",
+   "Leaf_Rust_10.jpg"
+  ],
+  "Loose Smut": [
+   "Loose_Smut_01.jpg",
+   "Loose_Smut_02.jpg",
+   "Loose_Smut_03.jpg",
+   "Loose_Smut_04.jpg",
+   "Loose_Smut_05.jpg",
+   "Loose_Smut_06.jpg",
+   "Loose_Smut_07.jpg",
+   "Loose_Smut_08.jpg",
+   "Loose_Smut_09.jpg",
+   "Loose_Smut_10.jpg"
+  ]
+ }
+}
